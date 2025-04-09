@@ -1,6 +1,6 @@
 import pandas as pd
 
-def exportNames(code):
+def exportNames(code,txt):
     fields = ['Name-Nom', 'AreaOfApplicationCode']
 
     df = pd.read_csv('database.csv', encoding='latin-1', usecols=fields)
@@ -12,6 +12,9 @@ def exportNames(code):
     print (df_Out) #only returns names
 
     df_Out.to_csv('names.csv')
+    
+    if (txt):
+        df_Out.to_csv('names.txt', sep='\t', index=False)
 
 print("Welcome to NSERC DB Scraper")
 print("=================================")
@@ -32,8 +35,11 @@ year = input("Enter the range (in fiscal years) of databases that you want to pu
 
 print("")
 
+txt = input("Would you like a .txt file as well?: ")
+print("")
+
 print("Showing the first and last 5 entries:")
 
-exportNames(code)
+exportNames(code, txt)
 
 print("names.csv has been exported.")
