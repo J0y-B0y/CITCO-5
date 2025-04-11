@@ -387,8 +387,7 @@ def main():
     process_researchers(researcher_list, export_txt=args.txt, output_file=args.output)
 
     # Analyze correlations if requested
-    if args.analyze:
-        analyze_correlation(os.path.join("exports", args.output))
+    analyze_correlation(os.path.join("exports", args.output))
 
 if __name__ == "__main__":
     main()
