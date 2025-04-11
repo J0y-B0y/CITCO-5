@@ -13,6 +13,7 @@ import random
 import time
 import matplotlib.pyplot as plt
 import seaborn as sns
+from fpdf import FPDF
 time.sleep(random.uniform(1, 3))
 
 # Setup logging
@@ -70,9 +71,6 @@ print("names.csv has been exported.")"""
 # Scholar Search (2.1)
 # ------------------------
 def search_scholar_profile(name: str) -> Tuple[Optional[str], Optional[str]]:
-    """
-    Searches Google Scholar for a researcher's profile link.
-    """
     query = urllib.parse.quote_plus(name)
     url = f"https://scholar.google.com/scholar?q={query}"
     headers = {'User-Agent': 'Mozilla/5.0'}
@@ -94,11 +92,7 @@ def search_scholar_profile(name: str) -> Tuple[Optional[str], Optional[str]]:
 # Scholar Scraping (2.2)
 # ------------------------
 def scrape_citation_data(profile_url: str) -> Tuple[Optional[Dict[int, int]], Optional[str]]:
-    """
-    Scrapes citation history from a Google Scholar profile.
-    """
     headers = {'User-Agent': 'Mozilla/5.0'}
-
     try:
         response = requests.get(profile_url, headers=headers, timeout=10)
         response.raise_for_status()
@@ -203,13 +197,16 @@ def process_researchers(input_list: List[dict], export_txt: bool = True, output_
 
 # Pearson Correlation Function
 def compute_pearson(citations, grants):
-    r, p = pearsonr(citations, grants)
-    return r, p
+    return pearsonr(citations, grants)
 
-# Spearman Correlation Function
 def compute_spearman(citations, grants):
-    rho, p_rho = spearmanr(citations, grants)
-    return rho, p_rho
+    return spearmanr(citations, grants)
+
+def coleman_index(citations, grants):
+    if citations.mean() == 0:
+        return 0.0
+    return (citations.mean() - grants.mean()) / citations.mean()
+
 
 # Coleman Index Calculation (Custom Formula)
 def coleman_index(citations, grants):
@@ -287,11 +284,57 @@ def generate_visualizations(citations: pd.Series, grants: pd.Series, output_dir=
 
     print("✅ Visualizations saved to 'exports/'")
 
+def export_pdf_report(citations, grants, output_path="exports/report.pdf"):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", 'B', 16)
+    pdf.cell(0, 10, txt="CITCO Correlation Analysis Report", ln=True, align='C')
+    pdf.ln(10)
+
+    pdf.set_font("Arial", '', 12)
+    pdf.multi_cell(0, 10, txt="This report summarizes the results of statistical analysis run on data collected from NSERC's Discovery Grant program and Google Scholar citation data. The objective is to determine whether a correlation exists between funding amounts and academic influence, measured via citation counts.")
+
+    pdf.ln(10)
+    r, p_r = compute_pearson(citations, grants)
+    rho, p_rho = compute_spearman(citations, grants)
+    coleman = coleman_index(citations, grants)
+
+    pdf.set_font("Arial", 'B', 12)
+    pdf.cell(0, 10, txt="Statistical Summary:", ln=True)
+    pdf.set_font("Arial", '', 12)
+    pdf.multi_cell(0, 10, f"Pearson Correlation: r = {r:.4f}, p = {p_r:.4e}\n"
+                            f"Spearman Correlation: rho = {rho:.4f}, p = {p_rho:.4e}\n"
+                            f"Coleman Index: {coleman:.4f}")
+
+    pdf.ln(5)
+    pdf.cell(0, 10, txt="Visualizations:", ln=True)
+    pdf.image("exports/scatter_regression.png", w=180)
+    pdf.add_page()
+    pdf.image("exports/correlation_matrix.png", w=180)
+
+    pdf.output(output_path)
+    print(f"✅ PDF report saved to {output_path}")
+
+def export_txt_report(citations, grants, output_path="exports/report.txt"):
+    with open(output_path, 'w') as f:
+        r, p_r = compute_pearson(citations, grants)
+        rho, p_rho = compute_spearman(citations, grants)
+        coleman = coleman_index(citations, grants)
+
+        f.write("CITCO Correlation Analysis Report\n")
+        f.write("===============================\n\n")
+        f.write("Pearson Correlation: r = {:.4f}, p = {:.4e}\n".format(r, p_r))
+        f.write("Spearman Correlation: rho = {:.4f}, p = {:.4e}\n".format(rho, p_rho))
+        f.write("Coleman Index: {:.4f}\n\n".format(coleman))
+        f.write("Note: Visualizations are saved separately in the exports directory.\n")
+
+    print(f"✅ TXT report saved to {output_path}")
+
 
 # ------------------------
 # Analyze Correlation (3.6)
 # ------------------------
-def analyze_correlation(csv_path: str = "exports/researcher_stats.csv"):
+def analyze_correlation(csv_path: str = "exports/researcher_stats.csv", export_format: str = "pdf"):
     df = pd.read_csv(csv_path)
 
     if 'Total Citations' not in df or 'Grant Amount' not in df:
@@ -320,6 +363,13 @@ def analyze_correlation(csv_path: str = "exports/researcher_stats.csv"):
 
     print("\n=== 3.6 Generating Visualizations ===")
     generate_visualizations(citations, grants)
+
+    if export_format == "pdf":
+        export_pdf_report(citations, grants)
+    elif export_format == "txt":
+        export_txt_report(citations, grants)
+    else:
+        print("Invalid export format specified. Use 'pdf' or 'txt'.")
 
 # ------------------------
 # Process Researchers and Export Data
