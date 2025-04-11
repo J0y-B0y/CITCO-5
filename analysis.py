@@ -75,13 +75,7 @@ def search_scholar_profile(name: str) -> Tuple[Optional[str], Optional[str]]:
     """
     query = urllib.parse.quote_plus(name)
     url = f"https://scholar.google.com/scholar?q={query}"
-    user_agents = [
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Version/13.0.3 Safari/537.36',  # Safari
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36'  # Chrome
-    ]
-
-    # Randomly choose a user-agent
-    headers = {'User-Agent': random.choice(user_agents)}
+    headers = {'User-Agent': 'Mozilla/5.0'}
 
     logging.info(f"Searching for: {name}")
     try:
@@ -100,29 +94,25 @@ def search_scholar_profile(name: str) -> Tuple[Optional[str], Optional[str]]:
 # Scholar Scraping (2.2)
 # ------------------------
 def scrape_citation_data(profile_url: str) -> Tuple[Optional[Dict[int, int]], Optional[str]]:
-    user_agents = [
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Version/13.0.3 Safari/537.36',  # Safari
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.149 Safari/537.36'  # Chrome
-    ]
+    """
+    Scrapes citation history from a Google Scholar profile.
+    """
+    headers = {'User-Agent': 'Mozilla/5.0'}
 
-    # Randomly choose a user-agent
-    headers = {'User-Agent': random.choice(user_agents)}
     try:
         response = requests.get(profile_url, headers=headers, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
-        
-        print(f"Scraping URL: {profile_url}")  # Debugging print
+
         years = [int(tag.text) for tag in soup.select('.gsc_g_t')]
         citations = [int(tag.text) for tag in soup.select('.gsc_g_al')]
-        
+
         if not years or not citations:
             return None, "No citation data found"
 
         return dict(zip(years, citations)), None
     except Exception as e:
         return None, f"Failed to parse Scholar page: {e}"
-
 
 # ------------------------
 # Data Filtering (2.3)
@@ -159,8 +149,10 @@ def handle_failure(name: str, reason: str, log_file: str = "error_log.txt") -> N
 # Data Export (2.6)
 # ------------------------
 def export_dataset(data: List[dict], output_path: str, export_txt: bool = False) -> None:
+    """
+    Exports researcher data to CSV and optionally TXT.
+    """
     df = pd.DataFrame(data)
-    print(f"Exporting data to {output_path}")  # Debugging print
     df.to_csv(output_path, index=False)
     logging.info(f"Exported CSV: {output_path}")
 
@@ -169,21 +161,21 @@ def export_dataset(data: List[dict], output_path: str, export_txt: bool = False)
         df.to_csv(txt_path, sep='\t', index=False)
         logging.info(f"Exported TXT: {txt_path}")
 
-
 # ------------------------
 # Main Pipeline
 # ------------------------
 def process_researchers(input_list: List[dict], export_txt: bool = True, output_file: str = "researcher_stats.csv") -> None:
+    """
+    Runs the full analysis pipeline for all researchers.
+    """
     processed_data = []
     os.makedirs("exports", exist_ok=True)
 
     for r in input_list:
         name, dg_year = r.get('name'), r.get('dg_year')
-        print(f"Processing {name} ({dg_year})")  # Debugging print
         if not name or not dg_year:
-            print(f"Skipping {name} due to missing data")
             continue
-        
+
         profile_url, err = search_scholar_profile(name)
         if err:
             handle_failure(name, err)
@@ -197,7 +189,7 @@ def process_researchers(input_list: List[dict], export_txt: bool = True, output_
         filtered = filter_six_year_window(citation_data, dg_year)
         total_citations, total_pubs = compute_totals(filtered)
 
-        print(f"{name} | Citations: {total_citations}, Publications: {total_pubs}")  # Debugging print
+        logging.info(f"{name} | Citations: {total_citations}, Publications: {total_pubs}")
         processed_data.append({
             "Name": name,
             "DG Year": dg_year,
@@ -205,11 +197,8 @@ def process_researchers(input_list: List[dict], export_txt: bool = True, output_
             "Total Publications": total_pubs
         })
 
-    if processed_data:
-        export_dataset(processed_data, os.path.join("exports", output_file), export_txt)
-    else:
-        print("No data to export!")
-
+    
+    export_dataset(processed_data, os.path.join("exports", output_file), export_txt)
 
 
 # Pearson Correlation Function
