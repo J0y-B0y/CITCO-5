@@ -13,7 +13,7 @@ import random
 import time
 import matplotlib.pyplot as plt
 import seaborn as sns
-time.sleep(random.uniform(1, 3))  # Sleep for 1-3 seconds
+time.sleep(random.uniform(1, 3))
 
 # Setup logging
 logging.basicConfig(
@@ -234,16 +234,18 @@ def coleman_index(citations, grants):
 def load_nserc_data(csv_path: str = "names.csv") -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     print("Available columns in names.csv:", df.columns.tolist())
-
     if "Name-Nom" not in df.columns:
         raise ValueError("Required column 'Name-Nom' not found in names.csv")
-
     df = df.rename(columns={"Name-Nom": "name"})
     df = df.dropna(subset=["name"], how="any")
     return df[["name"]]
 
 # 3.4 Validate correlation results
 def validate_results_with_alternative(citations: pd.Series, grants: pd.Series):
+    """
+    Validates the correlation results using Pearson and Spearman correlation
+    with the same dataset.
+    """
     r, _ = compute_pearson(citations, grants)
     rho, _ = compute_spearman(citations, grants)
     print("Validation with same dataset:")
@@ -251,23 +253,36 @@ def validate_results_with_alternative(citations: pd.Series, grants: pd.Series):
 
 # 3.5 Sensitivity analysis
 def run_sensitivity_analysis(citations: pd.Series, grants: pd.Series):
+    """
+    Runs a sensitivity analysis by introducing artificial outliers and computing
+    Pearson and Spearman correlations again to see how sensitive the correlation is to noise.
+    """
     print("\nRunning sensitivity analysis with noise...")
+    
     noisy_citations = citations.copy()
     noisy_grants = grants.copy()
-    noisy_citations.iloc[0] *= 2  # artificial outlier
-    noisy_grants.iloc[1] *= 1.5
 
+    # Introduce artificial outliers
+    noisy_citations.iloc[0] *= 2  # artificial outlier in citations
+    noisy_grants.iloc[1] *= 1.5  # artificial outlier in grants
+
+    # Compute the Pearson and Spearman correlation on the noisy data
     r, _ = compute_pearson(noisy_citations, noisy_grants)
     rho, _ = compute_spearman(noisy_citations, noisy_grants)
+
     print(f" Pearson r (noisy) = {r:.4f}, Spearman rho (noisy) = {rho:.4f}")
 
 # 3.6 Visualization
 def generate_visualizations(citations: pd.Series, grants: pd.Series, output_dir="exports"):
+    """
+    Generates visualizations including a scatter plot with regression line
+    and a correlation matrix for the citation and grant data.
+    """
     os.makedirs(output_dir, exist_ok=True)
     df = pd.DataFrame({"Citations": citations, "Grant Amount": grants})
 
     # Scatter plot with regression line
-    plt.figure(figsize=(8,6))
+    plt.figure(figsize=(8, 6))
     sns.regplot(x="Citations", y="Grant Amount", data=df, ci=None)
     plt.title("Citations vs Grant Amount")
     plt.savefig(os.path.join(output_dir, "scatter_regression.png"))
@@ -275,7 +290,7 @@ def generate_visualizations(citations: pd.Series, grants: pd.Series, output_dir=
 
     # Correlation matrix
     corr = df.corr()
-    plt.figure(figsize=(5,4))
+    plt.figure(figsize=(5, 4))
     sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f")
     plt.title("Correlation Matrix")
     plt.savefig(os.path.join(output_dir, "correlation_matrix.png"))
@@ -283,7 +298,10 @@ def generate_visualizations(citations: pd.Series, grants: pd.Series, output_dir=
 
     print("✅ Visualizations saved to 'exports/'")
 
-# Updated correlation function
+
+# ------------------------
+# Analyze Correlation (3.6)
+# ------------------------
 def analyze_correlation(csv_path: str = "exports/researcher_stats.csv"):
     df = pd.read_csv(csv_path)
 
@@ -301,9 +319,6 @@ def analyze_correlation(csv_path: str = "exports/researcher_stats.csv"):
     rho, p_rho = compute_spearman(citations, grants)
     print(f"Spearman rho = {rho:.4f}, p = {p_rho:.4e}")
 
-    print("\n=== Linear Regression ===")
-    print(run_regression(citations, grants))
-
     print("\n=== Coleman Index ===")
     coleman = coleman_index(citations, grants)
     print(f"Coleman Index = {coleman:.4f}")
@@ -317,9 +332,43 @@ def analyze_correlation(csv_path: str = "exports/researcher_stats.csv"):
     print("\n=== 3.6 Generating Visualizations ===")
     generate_visualizations(citations, grants)
 
+# ------------------------
+# Process Researchers and Export Data
+# ------------------------
+def process_researchers(input_list: List[dict], export_txt: bool = True, output_file: str = "researcher_stats.csv") -> None:
+    processed_data = []
+    os.makedirs("exports", exist_ok=True)
+
+    for r in input_list:
+        name, dg_year = r.get('name'), r.get('dg_year')
+        if not name or not dg_year:
+            continue
+
+        profile_url, err = search_scholar_profile(name)
+        if err:
+            handle_failure(name, err)
+            continue
+
+        citation_data, err = scrape_citation_data(profile_url)
+        if err:
+            handle_failure(name, err)
+            continue
+
+        filtered = filter_six_year_window(citation_data, dg_year)
+        total_citations, total_pubs = compute_totals(filtered)
+
+        processed_data.append({
+            "Name": name,
+            "DG Year": dg_year,
+            "Total Citations": total_citations,
+            "Total Publications": total_pubs
+        })
+
+    if processed_data:
+        export_dataset(processed_data, os.path.join("exports", output_file), export_txt)
 
 # ------------------------
-# CLI Interface
+# Main Pipeline
 # ------------------------
 def main():
     parser = argparse.ArgumentParser(description="CITCO Statistical Analyzer")
