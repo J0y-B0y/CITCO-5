@@ -23,7 +23,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-""""def exportNames(code,txt):
+def exportNames(code,txt):
     fields = ['Name-Nom', 'AreaOfApplicationCode']
 
     df = pd.read_csv('database.csv', encoding='latin-1', usecols=fields)
@@ -65,7 +65,7 @@ print("Showing the first and last 5 entries:")
 
 exportNames(code, txt)
 
-print("names.csv has been exported.")"""
+print("names.csv has been exported.")
 
 # ------------------------
 # Scholar Search (2.1)
